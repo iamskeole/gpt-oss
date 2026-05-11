@@ -4,14 +4,18 @@ David Rein, Betty Li Hou, Asa Cooper Stickland, Jackson Petty, Richard Yuanzhe P
 https://arxiv.org/abs/2311.12022
 """
 
+import pathlib
 import random
 
 import pandas
 
 from . import report
-from .types import Eval, EvalResult, SamplerBase, SingleEvalResult
 from .abcd_grader import extract_abcd
+from .types import Eval, EvalResult, SamplerBase, SingleEvalResult
 
+current_dir = pathlib.Path(__file__).parent
+current_dir = pathlib.Path(__file__).parent  # gpt_oss/evals
+dataset_dir = current_dir / "datasets"
 
 QUERY_TEMPLATE_MULTICHOICE = """
 {Question}
@@ -34,26 +38,33 @@ class GPQAEval(Eval):
         self,
         n_repeats: int = 8,
         variant: str = "diamond",
-        num_examples: int | None = None,  # restrict to a subset of the data for debugging
+        num_examples: int
+        | None = None,  # restrict to a subset of the data for debugging
         debug: bool = False,
         n_threads: int = 1,
     ):
-        df = pandas.read_csv(
-            f"https://openaipublic.blob.core.windows.net/simple-evals/gpqa_{variant}.csv"
-        )
+        df = pandas.read_csv(dataset_dir / f"gpqa_{variant}.csv")
         rng = random.Random(0)
 
         if debug:
-            examples = [row.to_dict() for _, row in df.iterrows() if "ESPRESSO spectrograph, please" in row["Question"]]
+            examples = [
+                row.to_dict()
+                for _, row in df.iterrows()
+                if "ESPRESSO spectrograph, please" in row["Question"]
+            ]
         else:
             examples = [row.to_dict() for _, row in df.iterrows()]
             if num_examples:
-                assert n_repeats == 1, "n_repeats only supported for num_examples = None"
+                assert n_repeats == 1, (
+                    "n_repeats only supported for num_examples = None"
+                )
                 examples = rng.sample(examples, num_examples)
 
         examples = examples * n_repeats
-        examples = [example | {"permutation": rng.sample(range(4), 4)} for example in examples]
-        self.examples = examples
+        examples = [
+            example | {"permutation": rng.sample(range(4), 4)} for example in examples
+        ]
+        self.examples = examples  # [:3]
         self.n_repeats = n_repeats
         self.n_threads = n_threads
 
@@ -69,7 +80,11 @@ class GPQAEval(Eval):
             correct_index = choices.index(row["Correct Answer"])
             correct_answer = "ABCD"[correct_index]
             choices_dict = dict(
-                A=choices[0], B=choices[1], C=choices[2], D=choices[3], Question=row["Question"]
+                A=choices[0],
+                B=choices[1],
+                C=choices[2],
+                D=choices[3],
+                Question=row["Question"],
             )
             prompt_messages = [
                 sampler._pack_message(
@@ -78,7 +93,9 @@ class GPQAEval(Eval):
             ]
             sampler_response = sampler(prompt_messages)
             response_text = sampler_response.response_text
-            actual_queried_prompt_messages = sampler_response.actual_queried_message_list
+            actual_queried_prompt_messages = (
+                sampler_response.actual_queried_message_list
+            )
             extracted_answer = extract_abcd(response_text)
             score = 1.0 if extracted_answer == correct_answer else 0.0
             html = report.jinja_env.from_string(report.HTML_JINJA).render(
@@ -88,12 +105,30 @@ class GPQAEval(Eval):
                 correct_answer=correct_answer,
                 extracted_answer=extracted_answer,
             )
-            convo = actual_queried_prompt_messages + [dict(content=response_text, role="assistant")]
+            convo = actual_queried_prompt_messages + [
+                dict(content=response_text, role="assistant")
+            ]
+
+            test_id = sampler.hash_prompt(choices_dict["Question"])
             return SingleEvalResult(
-                html=html, score=score, convo=convo, metrics={"chars": len(response_text)}
+                html=html,
+                score=score,
+                convo=convo,
+                metrics={"chars": len(response_text)},
+                example_level_metadata={
+                    "test_id": f"gpqa_{test_id}",
+                    "n_input_tokens": sampler_response.n_input_tokens,
+                    "n_reasoning_tokens": sampler_response.n_reasoning_tokens,
+                    "n_response_tokens": sampler_response.n_response_tokens,
+                    "n_output_tokens": sampler_response.n_output_tokens,
+                    "latency": sampler_response.latency,
+                    "correct": score,
+                },
             )
 
-        results = report.map_with_progress(fn, self.examples, num_threads=self.n_threads)
+        results = report.map_with_progress(
+            fn, self.examples, num_threads=self.n_threads
+        )
         return report.aggregate_results(results)
 
 

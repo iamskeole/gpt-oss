@@ -1,17 +1,45 @@
 import argparse
 import json
+import os
 from datetime import datetime
 
 from . import report
-from .basic_eval import BasicEval
-from .gpqa_eval import GPQAEval
 from .aime_eval import AIME25Eval
-from .healthbench_eval import HealthBenchEval
+from .basic_eval import BasicEval
 from .chat_completions_sampler import (
     OPENAI_SYSTEM_MESSAGE_API,
     ChatCompletionsSampler,
 )
+from .gpqa_eval import GPQAEval
+from .healthbench_eval import HealthBenchEval
 from .responses_sampler import ResponsesSampler
+
+if not os.environ.get("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = "sk-none"
+
+
+# -------------------------------------------------------------------
+# Helper to parse boolean-like arguments that can accept variants
+# such as true/false, 1/0, yes/no, etc.  It also supports the flag
+# form –flag (equivalent to `--flag true`).
+# -------------------------------------------------------------------
+class BoolOption(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        # `values` is None when the flag is provided without a value.
+        if values is None:
+            val = True
+        else:
+            v = values.lower()
+            if v in ("true", "1", "t", "yes", "y"):
+                val = True
+            elif v in ("false", "0", "f", "no", "n"):
+                val = False
+            else:
+                parser.error(
+                    f"argument {option_string}: invalid boolean value '{values}'. "
+                    "Expected true/false, 1/0, yes/no, t/f, y/n"
+                )
+        setattr(namespace, self.dest, val)
 
 
 def main():
@@ -22,32 +50,32 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="gpt-oss-120b,gpt-oss-20b",
+        default="openai/gpt-oss-20b",
         help="Select a model by name. Accepts a comma-separated list.",
     )
     parser.add_argument(
         "--reasoning-effort",
         type=str,
-        default="low,medium,high",
+        default="low",
         help="Reasoning effort (low, medium, high). Accepts a comma-separated list.",
     )
     parser.add_argument(
         "--sampler",
         type=str,
-        choices=["responses", "chat_completions"],
-        default="responses",
+        choices=["responses", "chat"],
+        default="chat",
         help="Sampler backend to use for models.",
     )
     parser.add_argument(
         "--base-url",
         type=str,
-        default="http://localhost:8000/v1",
+        default="http://localhost:9999/v1",
         help="Base URL for the API.",
     )
     parser.add_argument(
         "--eval",
         type=str,
-        default="gpqa,healthbench,healthbench_hard,healthbench_consensus,aime25",
+        default="aime25",
         help="Select an eval by name. Accepts a comma-separated list.",
     )
     parser.add_argument(
@@ -59,19 +87,49 @@ def main():
     parser.add_argument(
         "--n-threads",
         type=int,
-        default=1584,
+        default=1,
         help="Number of threads to run.",
     )
-    parser.add_argument(
-        "--debug", action="store_true", help="Run in debug mode"
-    )
+    parser.add_argument("--debug", action="store_true", help="Run in debug mode")
     parser.add_argument(
         "--examples", type=int, help="Number of examples to use (overrides default)"
+    )
+    parser.add_argument(
+        "--enable-browser-tool",
+        action="store_true",
+        default=False,
+        help="Enable the builtin browser tool.",
+    )
+    parser.add_argument(
+        "--enable-python-tool",
+        action="store_true",
+        default=False,
+        help="Enable the builtin python tool.",
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=str,
+        default="/tmp/gpt_oss_eval",
+        help="Location of results output.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=69421337,
+        help="Seed for controling deterministic outputs.",
+    )
+    parser.add_argument(
+        "--n-repeats",
+        type=int,
+        default=1,
+        help="How many times to run the same benchmark",
     )
 
     args = parser.parse_args()
 
-    sampler_cls = ResponsesSampler if args.sampler == "responses" else ChatCompletionsSampler
+    sampler_cls = (
+        ResponsesSampler if args.sampler == "responses" else ChatCompletionsSampler
+    )
 
     models = {}
     for model_name in args.model.split(","):
@@ -83,6 +141,9 @@ def main():
                 temperature=args.temperature,
                 base_url=args.base_url,
                 max_tokens=131_072,
+                enable_browser_tool=args.enable_browser_tool,
+                enable_python_tool=args.enable_python_tool,
+                seed=args.seed,
             )
 
     print(f"Running with args {args}")
@@ -104,7 +165,7 @@ def main():
                 return BasicEval()
             case "gpqa":
                 return GPQAEval(
-                    n_repeats=1 if args.debug else 8,
+                    n_repeats=1 if args.debug else args.n_repeats,  # was hardcoded to 8
                     num_examples=num_examples,
                     debug=debug_mode,
                     n_threads=args.n_threads or 1,
@@ -135,7 +196,7 @@ def main():
                 )
             case "aime25":
                 return AIME25Eval(
-                    n_repeats=1 if args.debug else 8,
+                    n_repeats=1 if args.debug else args.n_repeats,  # was hardcoded to 8
                     num_examples=num_examples,
                     n_threads=args.n_threads or 1,
                 )
@@ -154,6 +215,9 @@ def main():
 
     now = datetime.now()
     date_str = now.strftime("%Y%m%d_%H%M%S")
+    out_root = args.results_dir
+    os.makedirs(out_root, exist_ok=True)
+
     for model_name, sampler in models.items():
         model_name = model_name.replace("/", "__")
         for eval_name, eval_obj in evals.items():
@@ -162,7 +226,7 @@ def main():
             file_stem = f"{eval_name}_{model_name}_temp{args.temperature}"
             # file stem should also include the year, month, day, and time in hours and minutes
             file_stem += f"_{date_str}"
-            report_filename = f"/tmp/{file_stem}{debug_suffix}.html"
+            report_filename = f"{out_root}/{file_stem}{debug_suffix}.html"
             print(f"Writing report to {report_filename}")
             with open(report_filename, "w") as fh:
                 fh.write(report.make_report(result))
@@ -171,12 +235,14 @@ def main():
             # Sort metrics by key
             metrics = dict(sorted(metrics.items()))
             print(metrics)
-            result_filename = f"/tmp/{file_stem}{debug_suffix}.json"
+            result_filename = f"/{out_root}/{file_stem}{debug_suffix}.json"
             with open(result_filename, "w") as f:
                 f.write(json.dumps(metrics, indent=2))
             print(f"Writing results to {result_filename}")
 
-            full_result_filename = f"/tmp/{file_stem}{debug_suffix}_allresults.json"
+            full_result_filename = (
+                f"{out_root}/{file_stem}{debug_suffix}_allresults.json"
+            )
             with open(full_result_filename, "w") as f:
                 result_dict = {
                     "score": result.score,

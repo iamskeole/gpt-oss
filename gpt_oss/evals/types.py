@@ -1,3 +1,5 @@
+import hashlib
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal, overload
 
@@ -5,15 +7,27 @@ Message = dict[str, Any]  # keys role, content
 MessageList = list[Message]
 
 
-
 @dataclass
 class SamplerResponse:
     """
     Response from a sampler.
     """
+
     response_text: str
     actual_queried_message_list: MessageList
     response_metadata: dict[str, Any]
+
+    n_input_tokens: int = 0
+    n_reasoning_tokens: int = 0
+    n_response_tokens: int = 0
+    n_output_tokens: int = 0
+
+    n_tool_calls_browser: int = 0
+    n_tool_calls_python: int = 0
+    n_errors: int = 0
+
+    latency: float = 0.0
+
 
 class SamplerBase:
     """
@@ -22,10 +36,14 @@ class SamplerBase:
     """
 
     def __call__(
-        self, 
+        self,
         message_list: MessageList,
     ) -> SamplerResponse:
         raise NotImplementedError
+
+    def hash_prompt(self, prompt: str) -> str:
+        hash_bytes = hashlib.sha256(prompt.encode()).digest()
+        return str(uuid.UUID(bytes=hash_bytes[:16]))
 
 
 @dataclass
@@ -63,4 +81,3 @@ class Eval:
 
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         raise NotImplementedError
-
