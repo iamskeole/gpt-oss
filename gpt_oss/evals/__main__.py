@@ -56,14 +56,14 @@ def main():
     parser.add_argument(
         "--reasoning-effort",
         type=str,
-        default="low",
+        default="medium",
         help="Reasoning effort (low, medium, high). Accepts a comma-separated list.",
     )
     parser.add_argument(
         "--sampler",
         type=str,
         choices=["responses", "chat"],
-        default="chat",
+        default="responses",
         help="Sampler backend to use for models.",
     )
     parser.add_argument(
@@ -81,7 +81,7 @@ def main():
     parser.add_argument(
         "--temperature",
         type=float,
-        default=1.0,
+        default=0.0,
         help="Sampling temperature",
     )
     parser.add_argument(

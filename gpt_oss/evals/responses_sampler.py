@@ -89,6 +89,7 @@ class ResponsesSampler(SamplerBase):
                 latency = time.time() - ts_start
                 usage = response.usage
 
+                n_errors = trial
                 n_input_tokens = usage.input_tokens
                 n_reasoning_tokens = 0
                 if hasattr(usage.output_tokens_details, "reasoning_tokens"):
@@ -113,15 +114,20 @@ class ResponsesSampler(SamplerBase):
                             # c.text handled below
                             pass
 
+                output_text = response.output_text
+                if not output_text:
+                    n_errors += 1
+
                 return SamplerResponse(
                     response_text=response.output_text,
-                    response_metadata={"usage": response.usage},
+                    response_metadata={"usage": usage},
                     actual_queried_message_list=message_list,
                     n_input_tokens=n_input_tokens,
                     n_reasoning_tokens=n_reasoning_tokens,
                     n_response_tokens=n_response_tokens,
                     n_output_tokens=n_output_tokens,
                     latency=latency,
+                    n_errors=n_errors,
                 )
             except openai.BadRequestError as e:
                 print("Bad Request Error", e)

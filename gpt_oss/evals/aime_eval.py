@@ -77,7 +77,7 @@ class AIME25Eval(Eval):
         examples = [
             example | {"permutation": rng.sample(range(4), 4)} for example in examples
         ]
-        self.examples = examples  # [:3]
+        self.examples = examples[18:22]  # [:3]
         self.n_repeats = n_repeats
         self.n_threads = n_threads
 
@@ -85,6 +85,7 @@ class AIME25Eval(Eval):
         def fn(row: dict):
             fmt = format_aime_question(row)
             test_id = sampler.hash_prompt(fmt)
+            print(f"Running test id aime25_{test_id}")
             prompt_messages = [sampler._pack_message(content=fmt, role="user")]
             sampler_response = sampler(prompt_messages)
             response_text = sampler_response.response_text

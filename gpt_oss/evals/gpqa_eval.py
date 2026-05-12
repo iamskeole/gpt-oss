@@ -86,6 +86,8 @@ class GPQAEval(Eval):
                 D=choices[3],
                 Question=row["Question"],
             )
+            test_id = sampler.hash_prompt(choices_dict["Question"])
+            print(f"Running test id gpqa_{test_id}")
             prompt_messages = [
                 sampler._pack_message(
                     content=format_multichoice_question(choices_dict), role="user"
@@ -108,8 +110,6 @@ class GPQAEval(Eval):
             convo = actual_queried_prompt_messages + [
                 dict(content=response_text, role="assistant")
             ]
-
-            test_id = sampler.hash_prompt(choices_dict["Question"])
             return SingleEvalResult(
                 html=html,
                 score=score,

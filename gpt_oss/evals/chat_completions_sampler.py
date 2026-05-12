@@ -98,6 +98,7 @@ class ChatCompletionsSampler(SamplerBase):
                 usage = response.usage
                 tool_calls = choice.message.tool_calls or []
 
+                n_errors = trial
                 n_input_tokens = usage.prompt_tokens
                 n_reasoning_tokens = 0
                 if hasattr(usage.completion_tokens_details, "reasoning_tokens"):
@@ -121,8 +122,18 @@ class ChatCompletionsSampler(SamplerBase):
                         self._pack_message("assistant", choice.message.reasoning)
                     )
 
+                elif getattr(choice.message, "reasoning_content", None):
+                    message_list.append(
+                        self._pack_message(
+                            "assistant", choice.message.reasoning_content
+                        )
+                    )
+
                 if not content:
-                    raise ValueError("OpenAI API returned empty response; retrying")
+                    n_errors += 1
+                    content = "empty response"
+                    if choice.finish_reason != "length":
+                        raise ValueError("OpenAI API returned empty response; retrying")
                 return SamplerResponse(
                     response_text=content,
                     response_metadata={"usage": response.usage},
@@ -134,6 +145,7 @@ class ChatCompletionsSampler(SamplerBase):
                     n_tool_calls_browser=n_tool_calls_browser,
                     n_tool_calls_python=n_tool_calls_python,
                     latency=latency,
+                    n_errors=n_errors,
                 )
             except openai.BadRequestError as e:
                 print("Bad Request Error", e)
