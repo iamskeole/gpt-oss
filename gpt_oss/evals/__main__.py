@@ -69,7 +69,7 @@ def main():
     parser.add_argument(
         "--base-url",
         type=str,
-        default="http://localhost:9999/v1",
+        default="http://localhost:8888/v1",
         help="Base URL for the API.",
     )
     parser.add_argument(

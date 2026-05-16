@@ -77,6 +77,9 @@ class ResponsesSampler(SamplerBase):
                         "seed": self.seed,
                     },
                 }
+                if not tools:
+                    request_kwargs.pop("tools", None)
+
                 if self.reasoning_model:
                     request_kwargs["reasoning"] = (
                         {"effort": self.reasoning_effort}
@@ -126,6 +129,8 @@ class ResponsesSampler(SamplerBase):
                     n_reasoning_tokens=n_reasoning_tokens,
                     n_response_tokens=n_response_tokens,
                     n_output_tokens=n_output_tokens,
+                    n_tool_calls_browser=n_tool_calls_browser,
+                    n_tool_calls_python=n_tool_calls_python,
                     latency=latency,
                     n_errors=n_errors,
                 )

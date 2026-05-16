@@ -79,7 +79,7 @@ class ChatCompletionsSampler(SamplerBase):
                         reasoning_effort=self.reasoning_effort,
                         temperature=self.temperature,
                         max_tokens=self.max_tokens,
-                        tools=tools,
+                        tools=tools if tools else None,
                         seed=self.seed,
                     )
                 else:
@@ -88,7 +88,7 @@ class ChatCompletionsSampler(SamplerBase):
                         messages=message_list,
                         temperature=self.temperature,
                         max_tokens=self.max_tokens,
-                        tools=tools,
+                        tools=tools if tools else None,
                         seed=self.seed,
                     )
                 latency = time.time() - ts_start

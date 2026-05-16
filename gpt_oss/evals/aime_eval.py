@@ -77,7 +77,7 @@ class AIME25Eval(Eval):
         examples = [
             example | {"permutation": rng.sample(range(4), 4)} for example in examples
         ]
-        self.examples = examples[18:22]  # [:3]
+        self.examples = examples  # [:3]
         self.n_repeats = n_repeats
         self.n_threads = n_threads
 
@@ -120,6 +120,9 @@ class AIME25Eval(Eval):
                     "n_reasoning_tokens": sampler_response.n_reasoning_tokens,
                     "n_response_tokens": sampler_response.n_response_tokens,
                     "n_output_tokens": sampler_response.n_output_tokens,
+                    "n_tool_calls_browser": sampler_response.n_tool_calls_browser,
+                    "n_tool_calls_python": sampler_response.n_tool_calls_python,
+                    "n_errors": sampler_response.n_errors,
                     "latency": sampler_response.latency,
                     "correct": score,
                 },
